@@ -1,5 +1,4 @@
 #include "hw7.h"
-// #include "string.h"
 
 /// HELPERS
 int isOp(char c)
@@ -32,8 +31,7 @@ bst_sf *insert_bst_sf(matrix_sf *mat, bst_sf *root)
     // check if root is null
     if (root == NULL)
     {
-        // *root = *mat;
-        root = malloc(sizeof(bst_sf));
+        root = malloc(sizeof(bst_sf));//init new root
         root->mat = mat;
         root->right_child = NULL;
         root->left_child = NULL;
@@ -41,14 +39,15 @@ bst_sf *insert_bst_sf(matrix_sf *mat, bst_sf *root)
         return root;
     }
 
+    // check right subtree for names greater than root, and left subtree for names less than root
     // no two matrices will have the same name, so there will be no checking for this case
     if ( mat->name > root->mat->name)
     {
-        root->left_child = insert_bst_sf(mat, (root->right_child));
+        root->right_child = insert_bst_sf(mat, (root->right_child));
     }
     else
     {
-        root->right_child = insert_bst_sf(mat, (root->left_child));
+        root->left_child = insert_bst_sf(mat, (root->left_child));
     }
 
     return root;
@@ -56,19 +55,21 @@ bst_sf *insert_bst_sf(matrix_sf *mat, bst_sf *root)
 
 matrix_sf *find_bst_sf(char name, bst_sf *root)
 {
+    // no matrix if root is null
     if (root == NULL){
         return NULL;
     }
 
+    // found
     if (name == root->mat->name)
     {
         return root->mat;
     }
-    else if (name > root->mat->name)
+    else if (name > root->mat->name)//name is greater, check right subtree
     {
         return find_bst_sf(name, (root->right_child));
     }
-    else
+    else//name must be lower, check left subtree
     {
         return find_bst_sf(name, (root->left_child));
     }
@@ -76,31 +77,35 @@ matrix_sf *find_bst_sf(char name, bst_sf *root)
 
 void free_bst_sf(bst_sf *root)
 {
+    // do nothing if root is null
     if (root == NULL){
         return;
     }
 
+    //free subtrees (if possible. if they are null, then nothing will happen)
     free_bst_sf(root->right_child);
     free_bst_sf(root->left_child);
 
-    // free(root->mat->values);
+    //free mat first to avoid dangling pointer
     free(root->mat);
     free(root);
 }
 
 matrix_sf *add_mats_sf(const matrix_sf *mat1, const matrix_sf *mat2)
 {
+    //init output matrix
     int rows = mat1->num_rows;
     int cols = mat2->num_cols;
     matrix_sf *out = malloc(sizeof(matrix_sf) + rows * cols * sizeof(int));
-    
     out->num_rows = rows;
     out->num_cols = cols;
+    out->name ='\0';
+
+    //element wise summation
     for (int i = 0; i < rows; i++)
     {
         for (int j = 0; j < cols; j++)
         {
-            // *(*((out->values) + i)+j) =  *(*((mat1->values)+i)+j) + *(*((mat2->values)+i)+j);
             *(out->values + i * cols + j) = *(mat1->values + i * cols + j) + *(mat2->values + i * cols + j);
         }
     }
@@ -115,10 +120,11 @@ matrix_sf *mult_mats_sf(const matrix_sf *mat1, const matrix_sf *mat2)
     int m = mat1->num_rows;
     int n = mat1->num_cols;
     int p = mat2->num_cols;
-
+    //output dim will be MxP
     matrix_sf *out = malloc(sizeof(matrix_sf) + m * p * sizeof(int));
     out->num_rows = m;
     out->num_cols = p;
+    out->name = '\0';
 
     for (int i = 0; i < m; i++)
     {
@@ -127,11 +133,9 @@ matrix_sf *mult_mats_sf(const matrix_sf *mat1, const matrix_sf *mat2)
             int sum = 0;
             for (int k = 0; k < n; k++)
             {
-                // sum += *(*(mat1+i)+k) * *(*(mat2+k)+j);
-                sum += *(mat1->values + i * n + k) * *(mat2->values + k * p + j);
+                sum += *(mat1->values + i * n + k) * *(mat2->values + k * p + j);//essentially a dot product
             }
-            // *(*(out->values+i)+j) = sum;
-            *(out->values + i * p + j) = sum;
+            *(out->values + i * p + j) = sum;//sum of each dot product
         }
     }
 
@@ -140,17 +144,19 @@ matrix_sf *mult_mats_sf(const matrix_sf *mat1, const matrix_sf *mat2)
 
 matrix_sf *transpose_mat_sf(const matrix_sf *mat)
 {
+    //output init
     int rows = mat->num_rows;
     int cols = mat->num_cols;
     matrix_sf *out = malloc(sizeof(matrix_sf) + rows * cols * sizeof(int));
-    out->num_rows = cols;
+    out->num_rows = cols;//transpose dims are swapped
     out->num_cols = rows;
+    out->name = '\0';
 
     for (int i = 0; i < rows; i++)
     {
         for (int j = 0; j < cols; j++)
         {
-            *(out->values + j * rows + i) = *(mat->values + i * cols + j);
+            *(out->values + j * rows + i) = *(mat->values + i * cols + j);//swap indexing for transpose
         }
     }
 
@@ -161,10 +167,10 @@ matrix_sf *create_matrix_sf(char name, const char *expr)
 {
     int NR = 0;
     int NC = 0;
-    int offset = 0;
-    sscanf(expr, "%d %d%n", &NR, &NC, &offset);
-    expr += offset;
-
+    
+    sscanf(expr, "%d %d", &NR, &NC);//get dims
+    expr = strchr(expr, '[') + 1;//skip to inside brackets
+    //init output
     matrix_sf *out = malloc(sizeof(matrix_sf) + NR * NC * sizeof(int));
     out->name = name;
     out->num_rows = NR;
@@ -175,11 +181,13 @@ matrix_sf *create_matrix_sf(char name, const char *expr)
         for (int j = 0; j < NC; j++)
         {
             int val = 0;
+            int offset;
             sscanf(expr, "%d%n", &val, &offset);
-            // *(*((out->values)+i)+j) = val;
-            *(out->values + i * NC + j) = val;
-            expr = expr + offset;
+            *(out->values + i * NC + j) = val;//add the value
+            expr = expr + offset;//advance through the row
         }
+        expr = strchr(expr, ';') + 1;// skip to next row
+        
     }
 
     return out;
@@ -189,24 +197,24 @@ char *infix2postfix_sf(char *infix)
 {
     int len = strlen(infix);
     char *p = infix;
-    // printf("%s\n",p);
+
     char *out = malloc(len * sizeof(char) + 1); // there is at most len + 1 characters in the final string, since parenthesis wont be preserved
     int steps = 0;
 
-    char s[MAX_LINE_LEN];
+    char s[MAX_LINE_LEN];//mimic a stack with a list and index
     int top = -1;
-    // while (steps < len + 1)
     while (*p != '\0')
     {
         if (*p >= 'A' && *p <= 'Z')
         {
-            *out = *p;
+            *out = *p;//directly print characters when found
             out++;
 
             steps++;
         }
         else if (*p == '(')
         {
+            //push
             top++;
             s[top] = *p;
             
@@ -215,6 +223,7 @@ char *infix2postfix_sf(char *infix)
         {
             while (s[top] != '(')
             {
+                //pop
                 *out = s[top];
                 top--;
                 out++;
@@ -227,6 +236,7 @@ char *infix2postfix_sf(char *infix)
         {
             while (!(top <=-1) && (precedence(*p) <= precedence(s[top])))
             {
+                //pop
                 *out = s[top];
                 top--;
                 out++;
@@ -240,7 +250,7 @@ char *infix2postfix_sf(char *infix)
         p++;
     }
 
-    while (!(top <= -1))
+    while (!(top <= -1))//retrieve all remaining elements from stack
     {
         *out = s[top];
         top--;
@@ -249,39 +259,51 @@ char *infix2postfix_sf(char *infix)
         steps++;
     }
     *out = '\0';
-    out -= steps;
+    out -= steps;//move back by steps to print full string
     return out;
 }
 
 matrix_sf *evaluate_expr_sf(char name, char *expr, bst_sf *root)
 {
-    matrix_sf *s[MAX_LINE_LEN];
+    matrix_sf *s[MAX_LINE_LEN];//stack and index
     int top = -1;
 
-    char *p = infix2postfix_sf(expr); // pointer to expression in postfix
-
+    char *postfix = infix2postfix_sf(expr); // pointer to expression in postfix
+    char *p = postfix;//copy pointer. makes memory freeing easier later
     while (*p != '\0')
     {
-        if (*p >= 'A' && *p <= 'Z')
+        if (*p >= 'A' && *p <= 'Z')//characters/matrices go into stack
         {
             top++;
             s[top] = find_bst_sf(*p, root);
         }
         else if (isOp(*p))
         {
-            if (*p == '\'')
+            if (*p == '\'')//unary, pop one matrix
             {
                 matrix_sf *mat = s[top];
                 s[top] = transpose_mat_sf(mat);
-                // top--;
+
+                if (!find_bst_sf(mat->name, root)){//only free intermediate calculations if they are not on the bst
+                    free(mat);
+                }
             }
-            else if (*p == '*')
+            else if (*p == '*')//binary pop two matrices
             {
                 matrix_sf *right = s[top];
                 top--;
                 matrix_sf *left = s[top];
                 // top--;
                 s[top] = mult_mats_sf(left, right);
+
+                //only free intermediate calculations if they are not on the bst
+                if (!find_bst_sf(left->name, root)){
+                    free(left);
+                }
+                if (!find_bst_sf(right->name, root)){
+                    free(right);
+                }
+                
             }
             else if (*p == '+')
             {
@@ -290,10 +312,19 @@ matrix_sf *evaluate_expr_sf(char name, char *expr, bst_sf *root)
                 matrix_sf *left = s[top];
                 // top--;
                 s[top] = add_mats_sf(left, right);
+
+                //only free intermediate calculations if they are not on the bst
+                if (!find_bst_sf(left->name, root)){
+                    free(left);
+                }
+                if (!find_bst_sf(right->name, root)){
+                    free(right);
+                }
             }
         }
         p++;
     }
+    free(postfix);
 
     matrix_sf *out = s[top];
     out->name = name;
@@ -308,27 +339,27 @@ matrix_sf *execute_script_sf(char *filename)
 
     bst_sf *bst = NULL;
     matrix_sf *result = NULL;
-    while (getline(&buf, &max_line_size, file) != -1)
-    {
+    while (getline(&buf, &max_line_size, file) != -1)//keep getting lines from the file to process
+    {  
         char name;
-        int offset;
-        sscanf(buf, "%c =%n", &name, &offset);
-        char * body = buf + offset; //use the formula/definition body and avoid pointer mod
+        sscanf(buf, "%c", &name);//retrieve name 
+        char * body = strchr(buf, '=') + 1;
         matrix_sf *mat = NULL;
 
-        if (strchr(body, '['))
+        if (strchr(body, '['))//only matrix definitions have square brackets
         {
             mat = create_matrix_sf(name, body);
         }
-        else
+        else//input files are well formatted, so no need to check 3rd case 
         {
             mat = evaluate_expr_sf(name, body, bst);
         }
+
         bst = insert_bst_sf(mat, bst);  
         result = mat;//store final result
     }
-
-    // free_bst_sf(bst);
+    result = copy_matrix(result->num_rows, result->num_cols, result->values);//self copy, new pointer
+    free_bst_sf(bst);//copied matrix allows for bst to be freed with altering result variable
     free(buf);
     fclose(file);
 
