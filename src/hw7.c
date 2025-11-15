@@ -28,24 +28,27 @@ int precedence(char op)
 bst_sf *insert_bst_sf(matrix_sf *mat, bst_sf *root)
 {
     // given the root, compare the name of the root to the input matrix, and place it in the right or left subtree until it reaches a leaf
+
+    // check if root is null
     if (root == NULL)
     {
         // *root = *mat;
-        bst_sf *newRoot = malloc(sizeof(bst_sf));
-        newRoot->mat = mat;
-        *root = *newRoot;
+        root = malloc(sizeof(bst_sf));
+        root->mat = mat;
+        root->right_child = NULL;
+        root->left_child = NULL;
+        
         return root;
     }
 
     // no two matrices will have the same name, so there will be no checking for this case
-    // if (strcmp(root->name, mat->name) > 0 ){
-    if (root->mat->name > mat->name)
+    if ( mat->name > root->mat->name)
     {
-        insert_bst_sf(mat, (root->left_child));
+        root->left_child = insert_bst_sf(mat, (root->right_child));
     }
     else
     {
-        insert_bst_sf(mat, (root->right_child));
+        root->right_child = insert_bst_sf(mat, (root->left_child));
     }
 
     return root;
@@ -53,42 +56,36 @@ bst_sf *insert_bst_sf(matrix_sf *mat, bst_sf *root)
 
 matrix_sf *find_bst_sf(char name, bst_sf *root)
 {
-    if (root->mat->name == name)
+    if (root == NULL){
+        return NULL;
+    }
+
+    if (name == root->mat->name)
     {
         return root->mat;
     }
-    else if (root->mat->name > name)
+    else if (name > root->mat->name)
     {
-        return find_bst_sf(name, (root->left_child));
+        return find_bst_sf(name, (root->right_child));
     }
     else
     {
-        return find_bst_sf(name, (root->right_child));
+        return find_bst_sf(name, (root->left_child));
     }
 }
 
 void free_bst_sf(bst_sf *root)
 {
-    if ((root->right_child) != NULL)
-    {
-        free_bst_sf(root->right_child);
+    if (root == NULL){
+        return;
     }
 
-    if ((root->left_child) != NULL)
-    {
-        free_bst_sf(root->left_child);
-    }
+    free_bst_sf(root->right_child);
+    free_bst_sf(root->left_child);
 
-    // TODO: check if root is a null pointer
-    // TODO: make sure that freeing memory for a struct is this simple:
-    //  dont i also have to free the memory of the members of the struct too?
-    //  wouldnt i have dangling pointers otherwise?
-    if ((root->right_child) == NULL && (root->left_child) == NULL)
-    {
-        // free(root->mat->values);
-        // free(root->mat);
-        free(root);
-    }
+    // free(root->mat->values);
+    free(root->mat);
+    free(root);
 }
 
 matrix_sf *add_mats_sf(const matrix_sf *mat1, const matrix_sf *mat2)
@@ -96,6 +93,9 @@ matrix_sf *add_mats_sf(const matrix_sf *mat1, const matrix_sf *mat2)
     int rows = mat1->num_rows;
     int cols = mat2->num_cols;
     matrix_sf *out = malloc(sizeof(matrix_sf) + rows * cols * sizeof(int));
+    
+    out->num_rows = rows;
+    out->num_cols = cols;
     for (int i = 0; i < rows; i++)
     {
         for (int j = 0; j < cols; j++)
@@ -117,6 +117,8 @@ matrix_sf *mult_mats_sf(const matrix_sf *mat1, const matrix_sf *mat2)
     int p = mat2->num_cols;
 
     matrix_sf *out = malloc(sizeof(matrix_sf) + m * p * sizeof(int));
+    out->num_rows = m;
+    out->num_cols = p;
 
     for (int i = 0; i < m; i++)
     {
@@ -141,12 +143,13 @@ matrix_sf *transpose_mat_sf(const matrix_sf *mat)
     int rows = mat->num_rows;
     int cols = mat->num_cols;
     matrix_sf *out = malloc(sizeof(matrix_sf) + rows * cols * sizeof(int));
+    out->num_rows = cols;
+    out->num_cols = rows;
 
     for (int i = 0; i < rows; i++)
     {
         for (int j = 0; j < cols; j++)
         {
-            // *(*((out->values)+j)+i) = *(*((mat->values)+i)+j);
             *(out->values + j * rows + i) = *(mat->values + i * cols + j);
         }
     }
@@ -163,13 +166,16 @@ matrix_sf *create_matrix_sf(char name, const char *expr)
     expr += offset;
 
     matrix_sf *out = malloc(sizeof(matrix_sf) + NR * NC * sizeof(int));
+    out->name = name;
+    out->num_rows = NR;
+    out->num_cols = NC;
 
     for (int i = 0; i < NR; i++)
     {
         for (int j = 0; j < NC; j++)
         {
             int val = 0;
-            scanf(expr, "%d%n", &val, &offset);
+            sscanf(expr, "%d%n", &val, &offset);
             // *(*((out->values)+i)+j) = val;
             *(out->values + i * NC + j) = val;
             expr = expr + offset;
@@ -183,15 +189,16 @@ char *infix2postfix_sf(char *infix)
 {
     int len = strlen(infix);
     char *p = infix;
+    // printf("%s\n",p);
     char *out = malloc(len * sizeof(char) + 1); // there is at most len + 1 characters in the final string, since parenthesis wont be preserved
     int steps = 0;
 
     char s[MAX_LINE_LEN];
     int top = -1;
-    while (*p != '\n')
+    // while (steps < len + 1)
+    while (*p != '\0')
     {
-        int flag = 0;
-        if (*p >= 'A' && *p < 'Z')
+        if (*p >= 'A' && *p <= 'Z')
         {
             *out = *p;
             out++;
@@ -200,36 +207,32 @@ char *infix2postfix_sf(char *infix)
         }
         else if (*p == '(')
         {
-            // push(s, *p);
             top++;
             s[top] = *p;
+            
         }
         else if (*p == ')')
         {
-            while (peek(s) == '(')
+            while (s[top] != '(')
             {
-                // *out = pop(s);
                 *out = s[top];
                 top--;
                 out++;
 
                 steps++;
             }
-            // pop(s); // remove the starting parenthesis
             top--;
         }
         else if (isOp(*p))
         {
-            while (!stackEmpty(s) && (precedence(*p) <= precedence(peek(s))))
+            while (!(top <=-1) && (precedence(*p) <= precedence(s[top])))
             {
-                // *out = pop(s);
                 *out = s[top];
                 top--;
                 out++;
 
                 steps++;
             }
-            // push(s, *p);
             top++;
             s[top] = *p;
         }
@@ -237,16 +240,15 @@ char *infix2postfix_sf(char *infix)
         p++;
     }
 
-    while (!stackEmpty(s))
+    while (!(top <= -1))
     {
-        // *out = pop(s);
-        *out = p[top];
+        *out = s[top];
         top--;
         out++;
 
         steps++;
     }
-    *out = '\n';
+    *out = '\0';
     out -= steps;
     return out;
 }
@@ -258,9 +260,9 @@ matrix_sf *evaluate_expr_sf(char name, char *expr, bst_sf *root)
 
     char *p = infix2postfix_sf(expr); // pointer to expression in postfix
 
-    while (*p != '\n')
+    while (*p != '\0')
     {
-        if (*p >= 'A' && *p < 'Z')
+        if (*p >= 'A' && *p <= 'Z')
         {
             top++;
             s[top] = find_bst_sf(*p, root);
@@ -271,6 +273,7 @@ matrix_sf *evaluate_expr_sf(char name, char *expr, bst_sf *root)
             {
                 matrix_sf *mat = s[top];
                 s[top] = transpose_mat_sf(mat);
+                // top--;
             }
             else if (*p == '*')
             {
@@ -289,6 +292,7 @@ matrix_sf *evaluate_expr_sf(char name, char *expr, bst_sf *root)
                 s[top] = add_mats_sf(left, right);
             }
         }
+        p++;
     }
 
     matrix_sf *out = s[top];
@@ -301,33 +305,34 @@ matrix_sf *execute_script_sf(char *filename)
     FILE *file = fopen(filename, "r");
     char *buf = NULL;
     size_t max_line_size = MAX_LINE_LEN;
-    // getline(&str, &max_line_size, file);
 
-    bst_sf *bst = malloc(sizeof(bst_sf));
-    while (getline(&buf, &max_line_size, file) != EOF)
+    bst_sf *bst = NULL;
+    matrix_sf *result = NULL;
+    while (getline(&buf, &max_line_size, file) != -1)
     {
         char name;
         int offset;
         sscanf(buf, "%c =%n", &name, &offset);
-        buf += offset;
+        char * body = buf + offset; //use the formula/definition body and avoid pointer mod
         matrix_sf *mat = NULL;
 
-        int temp;
-        if (sscanf(buf, "%d", &temp) != -1)
+        if (strchr(body, '['))
         {
-            mat = create_matrix_sf(name, buf);
+            mat = create_matrix_sf(name, body);
         }
         else
         {
-            mat = evaluate_expr_sf(name, buf, bst);
+            mat = evaluate_expr_sf(name, body, bst);
         }
-        insert_bst_sf(mat, bst);
+        bst = insert_bst_sf(mat, bst);  
+        result = mat;//store final result
     }
 
+    // free_bst_sf(bst);
     free(buf);
     fclose(file);
 
-    return NULL;
+    return result;
 }
 
 // This is a utility function used during testing. Feel free to adapt the code to implement some of
